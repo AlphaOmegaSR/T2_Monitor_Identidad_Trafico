@@ -7,7 +7,8 @@ enum class TipoEvento
     ICMP,
     IP_CHANGE,
     MAC_CHANGE,
-    DESCONOCIDO
+    UNKNOWN,
+    ANOMALY
 };
 
 enum class NivelRiesgo
@@ -21,7 +22,7 @@ enum class NivelRiesgo
 
 struct Evento
 {
-    TipoEvento tipo = TipoEvento::DESCONOCIDO;
+    TipoEvento tipo = TipoEvento::UNKNOWN;
 
     std::string origenModulo;
     std::string descripcion;

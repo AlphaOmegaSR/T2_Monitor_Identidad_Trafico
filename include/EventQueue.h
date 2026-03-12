@@ -16,9 +16,11 @@ public:
 
     void push(const Evento& e)
     {
+        {
         std::lock_guard<std::mutex> lock(mtx);
         cola.push(e);
-        cv.notify_one();
+        }
+    cv.notify_one();
     }
 
     Evento pop()
