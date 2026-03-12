@@ -1,4 +1,5 @@
 #include <iostream>
+#include <set>
 
 #include "Analisis.h"
 #include "Evento.h"
@@ -9,6 +10,18 @@
 
 extern EventQueue queueEntrada;
 extern EventQueue queueSalida;
+
+//Estado interno del Modulo
+int contadorICMP = 0;
+int contadorARP = 0;
+int contadorMAC = 0;
+int contadorIP = 0;
+int contadorUNKNOWN = 0;
+
+std::set<std::string> ipsConocidas;
+
+std::string ultimaMAC;
+std::string ultimaIP;
 
 /*
 -----------------------------------------------------
@@ -41,23 +54,30 @@ void iniciarAnalisis(){
 void actualizarEstado(const Evento& evento){
     switch(evento.tipo){
         case TipoEvento::ARP:
-            std::cout << "[Analisis]: ARP detectado\n";
+            contadorARP++;
+            
             break;
 
         case TipoEvento::ICMP:
-            std::cout << "[Analisis]: ICMP detectado\n";
+            contadorICMP++;
+            
             break;
         
         case TipoEvento::IP_CHANGE:
-            std::cout << "[Analisis]: Cambio de IP detectado\n";
+            contadorIP++;
+            ultimaIP = evento.ipOrigen;
+
             break;
 
         case TipoEvento::MAC_CHANGE:
-            std::cout << "[Analisis]: Cambio de MAC detectado\n";
+            contadorMAC++;
+            ultimaMAC = evento.macOrigen;
+
             break;
 
         case TipoEvento::UNKNOWN:
-            std::cout << "[Analisis]: Evento desconocido detectado\n";
+            contadorUNKNOWN++;
+            
             break;
 
         default:
@@ -65,6 +85,12 @@ void actualizarEstado(const Evento& evento){
     }
 
     //Aqui se actualizaran variables contadoras y registros de informacion
+
+    //registrar IP si existe
+    if(!evento.ipOrigen.empty()){
+        ipsConocidas.insert(evento.ipOrigen);
+        
+    }
 }
 
 /*
