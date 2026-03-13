@@ -1,114 +1,32 @@
 #include "Identidad.h"
 
-#include <fstream>
-#include <ifaddrs.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <unistd.h>
-#include <cstring>
-#include <ctime>
-#include <iostream>
+// Constructor: inicializa la referencia a la cola de eventos
+ModuloIdentidad::ModuloIdentidad(EventQueue& colaEventos)
+    : queueEntrada(colaEventos) {}
 
-using namespace std;
+// Procesa el estado actual de la interfaz
+void ModuloIdentidad::procesarEstadoActual(const std::string& iface, const std::string& ip, const std::string& mac) {
+    EstadoIdentidad actual{ip, mac};
 
-// Obtiene la MAC de la interfaz
-string getMAC(const string& iface) {
-    string path = "/sys/class/net/" + iface + "/address";
-    ifstream file(path);
-    string mac;
-
-    if (file.is_open()) {
-        getline(file, mac);
-        file.close();
-    }
-
-    return mac;
-}
-
-// Obtiene la IP IPv4 de la interfaz
-string getIP(const string& iface) {
-    struct ifaddrs *ifaddr, *ifa;
-    string ip = "";
-
-    if (getifaddrs(&ifaddr) == -1) {
-        perror("getifaddrs");
-        return "";
-    }
-
-    for (ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == nullptr) continue;
-
-        if (ifa->ifa_addr->sa_family == AF_INET &&
-            iface == ifa->ifa_name) {
-
-            char host[NI_MAXHOST];
-            struct sockaddr_in *sa = (struct sockaddr_in *)ifa->ifa_addr;
-            inet_ntop(AF_INET, &sa->sin_addr, host, NI_MAXHOST);
-            ip = host;
+    auto it = estadosPrevios.find(iface);
+    if (it != estadosPrevios.end()) {
+        EstadoIdentidad& previo = it->second;
+        if (previo.ip != actual.ip || previo.mac != actual.mac) {
+            generarEventoCambio(iface, previo, actual);
         }
     }
 
-    freeifaddrs(ifaddr);
-    return ip;
+    // Actualiza el estado previo de la interfaz
+    estadosPrevios[iface] = actual;
 }
 
-// Obtiene timestamp como string
-string getTimestamp() {
-    time_t now = time(0);
-    char* dt = ctime(&now);
-    return string(dt);
-}
+// Genera un evento de cambio de identidad y lo envía a la cola thread-safe
+void ModuloIdentidad::generarEventoCambio(const std::string& iface, const EstadoIdentidad& anterior, const EstadoIdentidad& actual) {
+    Evento e;
+    e.tipo = Evento::Tipo::CAMBIO_IDENTIDAD;   // Tipo definido en evento.h
+    e.interfaceName = iface;
+    e.valorPrevio = "IP: " + anterior.ip + ", MAC: " + anterior.mac;
+    e.valorNuevo  = "IP: " + actual.ip + ", MAC: " + actual.mac;
 
-// Log local
-void logEvent(const string& msg) {
-    ofstream log("network_identity_monitor.log", ios::app);
-    log << getTimestamp() << " - " << msg << endl;
-    log.close();
-}
-
-// Función principal de monitoreo de identidad
-void iniciarIdentidad() {
-    string iface;
-    cout << "Ingrese la interfaz a monitorear: ";
-    cin >> iface;
-
-    string lastMAC = getMAC(iface);
-    string lastIP = getIP(iface);
-
-    logEvent("Inicio de monitoreo - IP: " + lastIP + " MAC: " + lastMAC);
-
-    while (true) {
-        string currentMAC = getMAC(iface);
-        string currentIP = getIP(iface);
-
-        // Detecta cambio de MAC
-        if (currentMAC != lastMAC) {
-            Evento e;
-            e.tipo = MAC_CHANGE;
-            e.iface = iface;
-            e.valorAnterior = lastMAC;
-            e.valorActual = currentMAC;
-            e.timestamp = getTimestamp();
-            queueEntrada.push(e);  // envia al flujo del sistema
-
-            logEvent("MAC cambiada: " + lastMAC + " -> " + currentMAC);
-            lastMAC = currentMAC;
-        }
-
-        // Detecta cambio de IP
-        if (currentIP != lastIP) {
-            Evento e;
-            e.tipo = IP_CHANGE;
-            e.iface = iface;
-            e.valorAnterior = lastIP;
-            e.valorActual = currentIP;
-            e.timestamp = getTimestamp();
-            queueEntrada.push(e);  // envia al flujo del sistema
-
-            logEvent("IP cambiada: " + lastIP + " -> " + currentIP);
-            lastIP = currentIP;
-        }
-
-        sleep(5); // intervalo de monitoreo
-    }
+    queueEntrada.push(e);
 }
